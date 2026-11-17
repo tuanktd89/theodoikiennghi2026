@@ -155,3 +155,32 @@ def test_pdf_scan_nang_duoc_nen_thanh_anh(tmp_path):
     blocks, skipped = blocks_for([f])
     assert not skipped and {b["type"] for b in blocks} == {"text", "image"}
     assert sum(len(b["source"]["data"]) for b in blocks if b["type"] == "image") < MAX_BYTES
+
+
+def test_claude_llm_khong_ep_tool_choice_va_thu_lai():
+    """Mô hình không hỗ trợ tool_choice ép buộc: không được gửi tham số này; thử lại nếu chưa gọi tool."""
+    from types import SimpleNamespace as NS
+    from ttkn.llm import ClaudeLLM
+
+    sent = []
+    replies = [NS(content=[NS(type="text", name=None, model_dump=lambda **k: {"type": "text", "text": "xin chào"})],
+                  stop_reason="end_turn"),
+               NS(content=[NS(type="tool_use", name="ghi_ket_qua", input={"a": 1})], stop_reason="tool_use")]
+
+    class Stream:
+        def __init__(self, r): self.r = r
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def get_final_message(self): return self.r
+
+    class Client:
+        class messages:
+            @staticmethod
+            def stream(**kw):
+                sent.append(kw)
+                return Stream(replies[len(sent) - 1])
+
+    llm = ClaudeLLM.__new__(ClaudeLLM)
+    llm.client, llm.model, llm.max_tokens = Client, "m", 100
+    assert llm.structured("s", [{"type": "text", "text": "x"}], {"type": "object"}) == {"a": 1}
+    assert len(sent) == 2 and all("tool_choice" not in k for k in sent)
