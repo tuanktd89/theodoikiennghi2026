@@ -1,0 +1,17 @@
+# Sao chép thành config.yaml và chỉnh theo cơ quan.
+co_quan:
+  cap_tren: "ỦY BAN NHÂN DÂN THÀNH PHỐ QUẢNG NINH"
+  ten: "THANH TRA THÀNH PHỐ"
+  ten_thanh_tra: "Thanh tra thành phố"
+  ten_ubnd: "Ủy ban nhân dân thành phố"
+  noi_nhan_bao_cao: "Ủy ban nhân dân thành phố"
+  dia_danh: "Quảng Ninh"
+  chuc_vu_ky: "CHÁNH THANH TRA"
+llm:
+  model: "claude-sonnet-5-5"
+dondoc:
+  so_ngay_yeu_cau: 7        # công văn đôn đốc yêu cầu báo cáo trong N ngày
+  bao_truoc_ngay: 7         # cảnh báo sắp đến hạn trước N ngày
+  ngay_lam_viec_bao_cao: 45 # hạn báo cáo mặc định = ngày KL + N ngày làm việc
+loc_van_ban:
+  tu_khoa: ["kết luận thanh tra", "kl-ttr", "thực hiện kết luận", "kiến nghị", "xử lý sau thanh tra", "khắc phục"]

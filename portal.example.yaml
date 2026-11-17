@@ -1,0 +1,32 @@
+# Sao chép thành portal.yaml rồi chỉnh các bộ chọn (selector) cho khớp giao diện Cổng chính quyền điện tử của bạn.
+# Chạy `python -m ttkn portal-inspect` để lưu ảnh chụp + HTML trang hộp thư đến, giúp xác định selector.
+base_url: "https://cong-chinh-quyen.example.gov.vn"
+login_url: "https://cong-chinh-quyen.example.gov.vn/dang-nhap"
+inbox_url: "https://cong-chinh-quyen.example.gov.vn/van-ban-den"
+
+# Thư mục lưu phiên đăng nhập (cookie). Không lưu mật khẩu trong tệp này.
+profile_dir: "data/browser_profile"
+# (tùy chọn) đường dẫn trình duyệt Chromium/Chrome nếu không dùng bản Playwright tải về
+browser_path: ""
+
+# Phần tử chỉ xuất hiện khi đã đăng nhập (dùng để biết đã đăng nhập xong)
+logged_in_selector: "a.dang-xuat"
+
+# Tự điền tài khoản (tùy chọn). Đặt biến môi trường PORTAL_USER / PORTAL_PASS; mã OTP/CAPTCHA/chữ ký số vẫn nhập tay.
+login_form:
+  user: "input[name=username]"
+  password: "input[name=password]"
+  submit: "button[type=submit]"
+
+inbox:
+  row: "table#ds-van-ban tbody tr"
+  fields:                      # selector tương đối trong từng dòng
+    so_ky_hieu: "td:nth-child(2)"
+    ngay_den: "td:nth-child(3)"
+    don_vi_gui: "td:nth-child(4)"
+    trich_yeu: "td:nth-child(5)"
+  open_link: "td:nth-child(5) a"      # liên kết mở chi tiết (để trống nếu tệp đính kèm nằm ngay trong dòng)
+  attachments: "a.tep-dinh-kem"       # liên kết tệp đính kèm (trong trang chi tiết hoặc trong dòng)
+  next_page: "a.trang-sau"            # nút sang trang kế (để trống nếu chỉ 1 trang)
+  max_pages: 5
+  date_format: "%d/%m/%Y"
