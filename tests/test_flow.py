@@ -132,3 +132,13 @@ def test_excel_roundtrip(kl, tmp_path):
     assert r["kl"] == 1 and r["kn"] == 4
     assert db.one(conn2, "SELECT han_hoan_thanh h FROM van_ban_chi_dao")["h"] == "2026-08-31"
     assert excel_io.import_workbook(conn2, x)["kl"] == 0   # không ghi đè/nhân đôi
+
+
+def test_db_usable_across_threads(tmp_path):
+    """Streamlit dùng kết nối cache ở nhiều luồng khác nhau."""
+    import threading
+    c = db.connect(tmp_path / "t.sqlite")
+    err = []
+    t = threading.Thread(target=lambda: err.append(db.pending(c)))
+    t.start(); t.join()
+    assert err == [[]]
