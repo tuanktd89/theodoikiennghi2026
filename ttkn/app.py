@@ -89,6 +89,7 @@ def page_nhap_kl():
     up = st.file_uploader("File kết luận", type=["pdf", "docx"], accept_multiple_files=True)
     if up and st.button("🔍 Phân tích kết luận", type="primary"):
         llm = get_llm()
+        errs = []
         for f in up:
             p = DATA / "ket_luan"
             p.mkdir(parents=True, exist_ok=True)
@@ -98,8 +99,14 @@ def page_nhap_kl():
                 try:
                     extract.stage_kl(conn, extract.extract_kl(llm, path, cfg["llm"]["max_pdf_pages"]))
                 except Exception as e:
-                    st.error(f"{f.name}: {e}")
+                    errs.append(f"{f.name}: {type(e).__name__}: {e}")
+        st.session_state["kl_errs"] = errs
+        st.session_state["kl_ok"] = len(up) - len(errs)
         st.rerun()
+    for e in st.session_state.get("kl_errs", []):
+        st.error(f"❌ Không phân tích được – {e}")
+    if st.session_state.get("kl_ok"):
+        st.success(f"Đã phân tích {st.session_state['kl_ok']} kết luận – xem bên dưới để rà soát và duyệt.")
     for d in db.pending(conn, "kl_moi"):
         p = d["payload"]
         with st.expander(f"#{d['id']} · {p.get('so_ky_hieu')} · {len(p.get('kien_nghi', []))} kiến nghị", expanded=True):

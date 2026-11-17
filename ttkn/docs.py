@@ -5,7 +5,28 @@ import base64
 import io
 from pathlib import Path
 
-MAX_BYTES = 28 * 1024 * 1024  # giới hạn an toàn cho 1 yêu cầu
+MAX_BYTES = 26 * 1024 * 1024   # giới hạn dung lượng SAU khi mã hóa base64 (API cho tối đa 32 MB/yêu cầu)
+PDF_NANG = 8 * 1024 * 1024     # PDF nặng hơn mức này (thường là bản scan) sẽ được nén thành ảnh từng trang
+MAX_ANH = 100                  # API cho tối đa 100 ảnh/yêu cầu
+
+
+def b64len(n: int) -> int:
+    return (n + 2) // 3 * 4
+
+
+def pdf_to_jpegs(path, max_pages: int = 100, dpi: int = 110, quality: int = 70) -> list[bytes]:
+    """Render từng trang PDF thành ảnh JPEG nhẹ (dùng cho bản scan quá nặng)."""
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(str(path))
+    out = []
+    for i in range(min(len(pdf), max_pages)):
+        img = pdf[i].render(scale=dpi / 72).to_pil().convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=quality, optimize=True)
+        out.append(buf.getvalue())
+    pdf.close()
+    return out
 
 
 def docx_text(path: str | Path) -> str:
@@ -28,6 +49,9 @@ def pdf_text(path: str | Path, max_pages: int = 5) -> str:
             return "\n".join((p.extract_text() or "") for p in pdf.pages[:max_pages])
     except Exception:
         return ""
+
+
+from pypdf import PdfReader  # noqa: E402
 
 
 def pdf_bytes(path: str | Path, max_pages: int = 100) -> bytes:
@@ -67,14 +91,34 @@ def blocks_for(paths: list[str | Path], max_pdf_pages: int = 100) -> tuple[list[
         try:
             if ext == ".pdf":
                 data = pdf_bytes(p, max_pdf_pages)
-                if len(data) > budget:
-                    skipped.append(f"{p.name} (quá dung lượng)")
+                if len(data) <= PDF_NANG and b64len(len(data)) <= budget:
+                    budget -= b64len(len(data))
+                    blocks.append({"type": "text", "text": f"[Tệp: {p.name}]"})
+                    blocks.append({"type": "document", "source": {
+                        "type": "base64", "media_type": "application/pdf",
+                        "data": base64.standard_b64encode(data).decode()}})
                     continue
-                budget -= len(data)
-                blocks.append({"type": "text", "text": f"[Tệp: {p.name}]"})
-                blocks.append({"type": "document", "source": {
-                    "type": "base64", "media_type": "application/pdf",
-                    "data": base64.standard_b64encode(data).decode()}})
+                # PDF nặng: nén thành ảnh từng trang, giảm dần chất lượng cho đến khi vừa giới hạn
+                n_img = sum(1 for b in blocks if b["type"] == "image")
+                room = max(MAX_ANH - n_img, 0)
+                done = False
+                for dpi, q in ((110, 70), (90, 60), (72, 55)):
+                    pages = pdf_to_jpegs(p, min(max_pdf_pages, room), dpi, q)
+                    if sum(b64len(len(x)) for x in pages) <= budget:
+                        done = True
+                        break
+                if not pages or not done:
+                    skipped.append(f"{p.name} (quá nặng, không nén được – hãy tách bớt trang)")
+                    continue
+                total = len(PdfReader(str(p)).pages)
+                for i, x in enumerate(pages, 1):
+                    budget -= b64len(len(x))
+                    blocks.append({"type": "text", "text": f"[Tệp: {p.name} – trang {i}]"})
+                    blocks.append({"type": "image", "source": {
+                        "type": "base64", "media_type": "image/jpeg",
+                        "data": base64.standard_b64encode(x).decode()}})
+                if total > len(pages):
+                    skipped.append(f"{p.name} (chỉ đọc {len(pages)}/{total} trang đầu do giới hạn dung lượng)")
             elif ext in (".png", ".jpg", ".jpeg"):
                 data = p.read_bytes()
                 if len(data) > min(budget, 5 * 1024 * 1024):

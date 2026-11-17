@@ -142,3 +142,16 @@ def test_db_usable_across_threads(tmp_path):
     t = threading.Thread(target=lambda: err.append(db.pending(c)))
     t.start(); t.join()
     assert err == [[]]
+
+
+def test_pdf_scan_nang_duoc_nen_thanh_anh(tmp_path):
+    import os
+    from PIL import Image
+    from ttkn.docs import MAX_BYTES, blocks_for
+    imgs = [Image.frombytes("RGB", (1650, 2340), os.urandom(1650 * 2340 * 3)) for _ in range(6)]
+    f = tmp_path / "scan.pdf"
+    imgs[0].save(f, "PDF", save_all=True, append_images=imgs[1:], resolution=200)
+    assert f.stat().st_size > 8 * 1024 * 1024
+    blocks, skipped = blocks_for([f])
+    assert not skipped and {b["type"] for b in blocks} == {"text", "image"}
+    assert sum(len(b["source"]["data"]) for b in blocks if b["type"] == "image") < MAX_BYTES
