@@ -184,3 +184,21 @@ def test_claude_llm_khong_ep_tool_choice_va_thu_lai():
     llm.client, llm.model, llm.max_tokens = Client, "m", 100
     assert llm.structured("s", [{"type": "text", "text": "x"}], {"type": "object"}) == {"a": 1}
     assert len(sent) == 2 and all("tool_choice" not in k for k in sent)
+
+
+def test_nhap_tu_claude_web(conn):
+    import json
+    from ttkn import prompts
+    assert "Quy ước đếm kiến nghị" in prompts.manual_prompt_kl()
+    js = json.dumps(KL_JSON, ensure_ascii=False)
+    # kèm lời dẫn, hàng rào mã và dấu phẩy thừa
+    raw = f"Đây là kết quả:\n```json\n{js[:-1]},}}\n```\nHy vọng hữu ích."
+    d = extract.parse_manual_json(raw)
+    assert len(d["kien_nghi"]) == 4
+    assert extract.parse_manual_json(js.replace('"Kinh tế"', '"abc"'))["kien_nghi"][0]["loai"] == "QLNN"
+    with pytest.raises(ValueError, match="cắt dở"):
+        extract.parse_manual_json(js[:200])
+    with pytest.raises(ValueError):
+        extract.parse_manual_json("không có json")
+    extract.stage_kl(conn, d)
+    assert len(db.pending(conn, "kl_moi")) == 1

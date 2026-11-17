@@ -20,6 +20,36 @@ def extract_kl(llm, path: str | Path, max_pdf_pages: int = 100) -> dict:
     return data
 
 
+def parse_manual_json(text: str) -> dict:
+    """Đọc kết quả JSON dán từ Claude.ai (chịu được ```json ... ```, lời dẫn thừa, dấu phẩy thừa)."""
+    import json
+    import re
+
+    t = (text or "").strip()
+    m = re.search(r"```(?:json)?\s*(.*?)```", t, re.S | re.I)
+    if m:
+        t = m.group(1).strip()
+    a, b = t.find("{"), t.rfind("}")
+    if a >= 0 and b <= a:
+        raise ValueError("Câu trả lời bị cắt dở (có dấu { mở đầu nhưng không có phần kết). Hãy bảo Claude gửi lại "
+                         "đầy đủ hoặc chia kết luận làm đôi.")
+    if a < 0:
+        raise ValueError("Không thấy khối JSON trong nội dung đã dán. Hãy sao chép toàn bộ câu trả lời của Claude.")
+    t = re.sub(r",\s*([}\]])", r"\1", t[a:b + 1])
+    try:
+        d = json.loads(t)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON bị lỗi ở dòng {e.lineno}, cột {e.colno} ({e.msg}). Có thể câu trả lời bị cắt dở – "
+                         "hãy bảo Claude gửi lại phần còn thiếu hoặc chia kết luận làm đôi.") from e
+    if not isinstance(d, dict) or not isinstance(d.get("kien_nghi"), list):
+        raise ValueError("JSON thiếu mục 'kien_nghi'.")
+    for k in d["kien_nghi"]:
+        if k.get("loai") not in db.LOAI_KN:
+            k["loai"] = "QLNN"
+    d.setdefault("canh_bao", [])
+    return d
+
+
 def validate_kl(conn, data: dict) -> list[str]:
     """Kiểm tra bản nháp; trả danh sách cảnh báo cho người duyệt."""
     w: list[str] = list(data.get("canh_bao") or [])

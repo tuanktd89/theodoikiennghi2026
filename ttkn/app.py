@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pandas as pd
 import streamlit as st
 
-from ttkn import alerts, db, drafting, excel_io, extract, inbox
+from ttkn import alerts, db, drafting, excel_io, extract, inbox, prompts
 from ttkn.config import load_config
 from ttkn.util import iso, parse_date, vn_date
 
@@ -86,23 +86,47 @@ def page_tong_quan():
 def page_nhap_kl():
     st.title("📥 Nhập kết luận thanh tra mới")
     st.caption("Tải file Kết luận (PDF/Word, kể cả bản scan). AI trích xuất → bạn rà soát/sửa → bấm Duyệt thì mới ghi vào sổ.")
-    up = st.file_uploader("File kết luận", type=["pdf", "docx"], accept_multiple_files=True)
-    if up and st.button("🔍 Phân tích kết luận", type="primary"):
-        llm = get_llm()
-        errs = []
-        for f in up:
-            p = DATA / "ket_luan"
-            p.mkdir(parents=True, exist_ok=True)
-            path = p / f.name
-            path.write_bytes(f.getbuffer())
-            with st.spinner(f"Đang đọc {f.name}…"):
-                try:
-                    extract.stage_kl(conn, extract.extract_kl(llm, path, cfg["llm"]["max_pdf_pages"]))
-                except Exception as e:
-                    errs.append(f"{f.name}: {type(e).__name__}: {e}")
-        st.session_state["kl_errs"] = errs
-        st.session_state["kl_ok"] = len(up) - len(errs)
-        st.rerun()
+    t_api, t_web = st.tabs(["🤖 Tự động (tính phí API)", "💬 Dùng gói Claude.ai (không tốn phí API)"])
+    with t_web:
+        st.markdown("**Cách làm** – dùng gói Claude.ai bạn đã trả tiền hàng tháng:")
+        st.markdown("1. Bấm biểu tượng **sao chép** ở góc khung bên dưới để lấy lời nhắc.\n"
+                    "2. Mở https://claude.ai, tạo cuộc trò chuyện mới, **đính kèm file kết luận (PDF/Word)** và **dán lời nhắc**.\n"
+                    "3. Chờ Claude trả lời bằng một khối mã JSON → **sao chép toàn bộ câu trả lời**.\n"
+                    "4. Dán vào ô bên dưới rồi bấm **Đọc kết quả**. Bạn rà soát/sửa/duyệt ở phần dưới như bình thường.")
+        st.code(prompts.manual_prompt_kl(), language="markdown")
+        txt = st.text_area("Dán câu trả lời của Claude vào đây", height=220, key="manual_json")
+        gf = st.file_uploader("(Tùy chọn) File kết luận gốc để lưu kèm hồ sơ", type=["pdf", "docx"], key="manual_file")
+        if st.button("📥 Đọc kết quả", type="primary", key="manual_go"):
+            try:
+                data = extract.parse_manual_json(txt)
+                if gf:
+                    d0 = DATA / "ket_luan"
+                    d0.mkdir(parents=True, exist_ok=True)
+                    (d0 / gf.name).write_bytes(gf.getbuffer())
+                    data["file_goc"] = str(d0 / gf.name)
+                extract.stage_kl(conn, data)
+                st.session_state["kl_errs"], st.session_state["kl_ok"] = [], 1
+                st.rerun()
+            except ValueError as e:
+                st.error(f"❌ {e}")
+    with t_api:
+        up = st.file_uploader("File kết luận", type=["pdf", "docx"], accept_multiple_files=True)
+        if up and st.button("🔍 Phân tích kết luận", type="primary"):
+            llm = get_llm()
+            errs = []
+            for f in up:
+                p = DATA / "ket_luan"
+                p.mkdir(parents=True, exist_ok=True)
+                path = p / f.name
+                path.write_bytes(f.getbuffer())
+                with st.spinner(f"Đang đọc {f.name}…"):
+                    try:
+                        extract.stage_kl(conn, extract.extract_kl(llm, path, cfg["llm"]["max_pdf_pages"]))
+                    except Exception as e:
+                        errs.append(f"{f.name}: {type(e).__name__}: {e}")
+            st.session_state["kl_errs"] = errs
+            st.session_state["kl_ok"] = len(up) - len(errs)
+            st.rerun()
     for e in st.session_state.get("kl_errs", []):
         st.error(f"❌ Không phân tích được – {e}")
     if st.session_state.get("kl_ok"):

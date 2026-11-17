@@ -122,3 +122,24 @@ SCHEMA_EVAL = {
     },
     "required": ["ket_qua"],
 }
+
+
+# ------------------------------------------------- Dùng Claude.ai (không qua API)
+def manual_prompt_kl() -> str:
+    """Lời nhắc để người dùng dán vào Claude.ai cùng file kết luận; kết quả dán lại vào công cụ."""
+    mau = {
+        "so_ky_hieu": "38/KL-TTr", "ngay_ban_hanh": "2026-06-10", "trich_yeu": "...",
+        "qd_thanh_tra": "Quyết định số ... ngày ...", "don_vi_duoc_thanh_tra": "...",
+        "han_thuc_hien": "2026-09-30", "han_text": "trong quý III/2026",
+        "kien_nghi": [{"stt": 1, "noi_dung": "(nguyên văn kiến nghị)", "don_vi": "(tên đơn vị)",
+                       "loai": "QLNN", "han": "2026-09-30", "han_text": "", "so_tien_trieu": None,
+                       "dat_m2": None, "trang": "12"}],
+        "canh_bao": ["(điểm mờ/không chắc chắn, nếu có)"],
+    }
+    import json
+    return (SYS_KL.strip() + "\n\n"
+            "Hãy đọc file Kết luận thanh tra đính kèm. Trả về DUY NHẤT một khối mã JSON (không giải thích thêm), "
+            "đúng cấu trúc mẫu dưới đây. 'loai' chỉ được là một trong: " + ", ".join(LOAI_ENUM) + ". "
+            "Ngày dạng YYYY-MM-DD, không có thì để null. Nếu quá nhiều kiến nghị khiến câu trả lời bị cắt, "
+            "hãy dừng ở kiến nghị cuối cùng hoàn chỉnh và ghi cảnh báo.\n\nMẫu:\n```json\n"
+            + json.dumps(mau, ensure_ascii=False, indent=2) + "\n```")
